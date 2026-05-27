@@ -1,0 +1,25 @@
+# Example configuration. Copy to config.yaml and edit with your real devices:
+#
+#     cp config.example.yaml config.yaml
+#
+# config.yaml is git-ignored so production IPs / community strings are never
+# committed. Do NOT put real devices in this example file.
+
+devices:
+  # NTCIP 1203 variable message sign
+  - name: vms_example
+    type: VMS_NTCIP1203
+    ip: 192.0.2.10          # replace with the panel IP
+    port: 161
+    community: public       # replace with the real community string
+    interval_seconds: 60
+
+  # SEMEX C5000 traffic signal controller
+  - name: semex_example
+    type: SEMEX_C5000_V1
+    ip: 192.0.2.20          # replace with the controller IP
+    port: 161
+    community: public       # replace with the real community string
+    alarm_interval_seconds: 30
+    cycle_interval_seconds: 2
+    cycle_change_log: false

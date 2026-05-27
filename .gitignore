@@ -1,0 +1,10 @@
+# Local config with real device IPs / community strings — never commit.
+config.yaml
+
+# Runtime logs
+logs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
