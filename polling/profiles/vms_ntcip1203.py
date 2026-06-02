@@ -4,22 +4,22 @@ VMS_NTCIP1203 profile — NTCIP 1203 variable message sign poller (read-only).
 
 Polls dmsControlMode, dmsMsgSourceMode, dmsMsgTableSource and shortErrorStatus,
 then reads the active MULTI string for the message currently displayed.
+
+OIDs come from shared.oid_providers (Ntcip1203V3); none are hardcoded here.
+SNMP access is read-only: the client is SnmpClient(allow_write=False).
 """
 
 import asyncio
 
-import common
+from shared import value_utils
+from shared.snmp_client import SnmpClient, classify_comm_status
+from shared.oid_providers import OidProviderRegistry
+from polling import common
 
-# ---------------------------------------------------------------------------
-# OID constants (NTCIP 1203)
-# ---------------------------------------------------------------------------
-OID_CTRL_MODE  = "1.3.6.1.4.1.1206.4.2.3.6.1.0"
-OID_SRC_MODE   = "1.3.6.1.4.1.1206.4.2.3.6.7.0"
-OID_MSG_SRC    = "1.3.6.1.4.1.1206.4.2.3.6.5.0"
-OID_SHORT_ERR  = "1.3.6.1.4.1.1206.4.2.3.9.7.1.0"
-OID_MULTI_BASE = "1.3.6.1.4.1.1206.4.2.3.5.8.1.3"
+# OID provider for this profile (no numeric OIDs live in this file).
+OIDS = OidProviderRegistry.resolve("VMS_NTCIP1203")
 
-REQUIRED_OIDS = [OID_CTRL_MODE, OID_SRC_MODE, OID_MSG_SRC, OID_SHORT_ERR]
+REQUIRED_OIDS = OIDS.required_oids()
 
 MULTI_MAX_LEN = 500
 
@@ -73,7 +73,7 @@ SHORT_ERROR_BITS = {
 
 def decode_short_error_status(value):
     """Decode shortErrorStatus into (err_text, err_raw 4-char hex)."""
-    iv = common.value_to_int(value)
+    iv = value_utils.value_to_int(value)
     if iv is None:
         return "?", "?"
     raw_hex = f"{iv:04X}"
@@ -97,7 +97,7 @@ def decode_message_id_code(val):
     if val is None:
         return result
 
-    raw = common.to_octets(val)
+    raw = value_utils.to_octets(val)
     if raw is None:
         try:
             iv = int(val)
@@ -120,17 +120,17 @@ def decode_message_id_code(val):
     return result
 
 
-async def read_current_multi(engine, transport, community, memory_type, message_number):
+async def read_current_multi(client, transport, community, memory_type, message_number):
     """GET dmsMessageMultiString. Returns (text, status: ok|read_error|unavailable)."""
     if memory_type is None or message_number is None:
         return None, "unavailable"
-    oid = f"{OID_MULTI_BASE}.{memory_type}.{message_number}"
-    val, err = await common.snmp_get_one(engine, transport, community, oid)
+    oid = OIDS.multi_oid(memory_type, message_number)
+    val, err = await client.get_one(transport, community, oid)
     if err:
         return None, "read_error"
     if val is None:
         return None, "unavailable"
-    return common.decode_octet_text(val), "ok"
+    return value_utils.decode_octet_text(val), "ok"
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ def build_suffix(ctrl, src, msg_hex, multi_field, err, err_raw):
 # Polling task
 # ---------------------------------------------------------------------------
 async def run_vms(dev):
-    engine = common.new_engine()
+    client = SnmpClient(allow_write=False)
     transport = None
     prev_state = {}
 
@@ -154,15 +154,15 @@ async def run_vms(dev):
         log_path = common.get_log_path(dev["name"], dev["ip"])
         try:
             if transport is None:
-                transport = await common.make_transport(dev["ip"], dev["port"])
-            vals, err = await common.snmp_get_many(
-                engine, transport, dev["community"], REQUIRED_OIDS)
+                transport = await client.make_transport(dev["ip"], dev["port"])
+            vals, err = await client.get_many(
+                transport, dev["community"], REQUIRED_OIDS)
         except asyncio.CancelledError:
             raise
         except Exception:
             vals, err = {}, "TIMEOUT"
 
-        comm = common.classify_comm_status(err, vals)
+        comm = classify_comm_status(err, vals)
 
         if comm in ("TIMEOUT", "SNMP_ERROR"):
             prefix = common.build_common_prefix(ts, dev, "vms", comm)
@@ -170,20 +170,20 @@ async def run_vms(dev):
             await asyncio.sleep(dev["interval_seconds"])
             continue
 
-        ctrl_str = decode_control_mode(vals.get(OID_CTRL_MODE))
-        src_str  = decode_source_mode(vals.get(OID_SRC_MODE))
-        err_str, err_raw = decode_short_error_status(vals.get(OID_SHORT_ERR))
-        mid = decode_message_id_code(vals.get(OID_MSG_SRC))
+        ctrl_str = decode_control_mode(vals.get(OIDS.CTRL_MODE))
+        src_str  = decode_source_mode(vals.get(OIDS.SRC_MODE))
+        err_str, err_raw = decode_short_error_status(vals.get(OIDS.SHORT_ERR))
+        mid = decode_message_id_code(vals.get(OIDS.MSG_SRC))
 
         if mid["valid"]:
             multi_text, multi_status = await read_current_multi(
-                engine, transport, dev["community"],
+                client, transport, dev["community"],
                 mid["memory_type"], mid["message_number"])
         else:
             multi_text, multi_status = None, "unavailable"
 
         if multi_status == "ok":
-            multi_clean = common.sanitize_one_line(multi_text, MULTI_MAX_LEN)
+            multi_clean = value_utils.sanitize_one_line(multi_text, MULTI_MAX_LEN)
             multi_field = f'MULTI="{multi_clean}"'
             multi_state = multi_clean
         elif multi_status == "read_error":

@@ -2,11 +2,12 @@
 """
 diag_poller.py — Read-only SNMP v2c diagnostic poller for ITS field devices.
 
-Orchestration only. Device-specific OIDs and decoding live in the profile
-modules under profiles/. Generic helpers live in common.py.
+Orchestration only. Device-specific OIDs live in shared/oid_providers/,
+decoding lives in polling/profiles/, and generic helpers in shared/.
 
-The tool is strictly READ-ONLY: it issues SNMP GET operations only and never
-performs SET, activation, reset, or any write operation.
+The tool is strictly READ-ONLY: profiles issue SNMP GET operations only,
+through SnmpClient(allow_write=False), and never perform SET, activation,
+reset, or any write operation.
 
 Usage:
     python diag_poller.py --config config.yaml   # config-driven (multi-device)
@@ -16,56 +17,17 @@ Usage:
 import asyncio
 import argparse
 
-import yaml
-
-from profiles import PROFILE_TASKS
-
-# Config defaults
-DEFAULT_PORT           = 161
-DEFAULT_COMMUNITY      = "public"
-DEFAULT_VMS_INTERVAL   = 60.0
-DEFAULT_ALARM_INTERVAL = 30.0
-DEFAULT_CYCLE_INTERVAL = 2.0
+from shared.config_loader import (
+    load_config, normalize_device,
+    DEFAULT_PORT, DEFAULT_COMMUNITY,
+    DEFAULT_VMS_INTERVAL, DEFAULT_ALARM_INTERVAL, DEFAULT_CYCLE_INTERVAL,
+)
+from polling.profiles import PROFILE_TASKS
 
 
 # ===========================================================================
 # Configuration
 # ===========================================================================
-def normalize_device(d):
-    """Apply per-type defaults and validate a device config dict."""
-    if "name" not in d or "type" not in d or "ip" not in d:
-        raise ValueError(f"Device missing required name/type/ip: {d!r}")
-    dtype = d["type"]
-    if dtype not in PROFILE_TASKS:
-        valid = ", ".join(sorted(PROFILE_TASKS))
-        raise ValueError(f"Unknown device type '{dtype}' for {d.get('name')}. "
-                         f"Valid types: {valid}")
-
-    out = {
-        "name":      str(d["name"]),
-        "type":      dtype,
-        "ip":        str(d["ip"]),
-        "port":      int(d.get("port", DEFAULT_PORT)),
-        "community": str(d.get("community", DEFAULT_COMMUNITY)),
-    }
-    if dtype == "VMS_NTCIP1203":
-        out["interval_seconds"] = float(d.get("interval_seconds", DEFAULT_VMS_INTERVAL))
-    elif dtype == "SEMEX_C5000_V1":
-        out["alarm_interval_seconds"] = float(d.get("alarm_interval_seconds", DEFAULT_ALARM_INTERVAL))
-        out["cycle_interval_seconds"] = float(d.get("cycle_interval_seconds", DEFAULT_CYCLE_INTERVAL))
-        out["cycle_change_log"] = bool(d.get("cycle_change_log", False))
-    return out
-
-
-def load_config(path):
-    with open(path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    devices = data.get("devices")
-    if not devices:
-        raise ValueError("Config has no 'devices' list")
-    return [normalize_device(d) for d in devices]
-
-
 def prompt_config():
     """Interactive fallback: configure a single device."""
     print("=== Diagnostic Poller (interactive) ===")
@@ -94,7 +56,7 @@ def prompt_config():
             d["alarm_interval_seconds"] = float(ai)
         if ci:
             d["cycle_interval_seconds"] = float(ci)
-    return [normalize_device(d)]
+    return [normalize_device(d, valid_types=set(PROFILE_TASKS))]
 
 
 def parse_args():
@@ -130,7 +92,10 @@ def describe(dev):
 
 def main():
     args = parse_args()
-    devices = load_config(args.config) if args.config else prompt_config()
+    if args.config:
+        devices = load_config(args.config, valid_types=set(PROFILE_TASKS))
+    else:
+        devices = prompt_config()
 
     print("\nMonitoring devices (read-only):")
     for d in devices:
