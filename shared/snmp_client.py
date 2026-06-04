@@ -9,9 +9,9 @@ toolkit structurally:
     - Polling always instantiates SnmpClient(allow_write=False).
     - Read-only PoCs may use allow_write=False.
     - Only PoC scenarios that explicitly declare requires_write=True may run
-      against a client created with allow_write=True, and the PoC runner is
-      responsible for enforcing the confirm_write / --confirm-write gate
-      before ever constructing such a client.
+    against a client created with allow_write=True, and the PoC runner is
+    responsible for enforcing the confirm_write / --confirm-write gate
+    before ever constructing such a client.
 
 Any SET-style operation goes through `_require_write()`, which raises if the
 client was not granted write permission. Today no SET operation is wired up

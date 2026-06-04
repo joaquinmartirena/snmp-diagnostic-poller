@@ -28,8 +28,7 @@ def normalize_device(d, valid_types=None):
     dtype = d["type"]
     if valid_types is not None and dtype not in valid_types:
         valid = ", ".join(sorted(valid_types))
-        raise ValueError(f"Unknown device type '{dtype}' for {d.get('name')}. "
-                         f"Valid types: {valid}")
+        raise ValueError(f"Unknown device type '{dtype}' for {d.get('name')}. "f"Valid types: {valid}")
 
     out = {
         "name":      str(d["name"]),
