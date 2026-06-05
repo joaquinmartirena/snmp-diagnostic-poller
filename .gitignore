@@ -8,3 +8,11 @@ logs/
 __pycache__/
 *.pyc
 .venv/
+
+# Setuptools / pip editable-install metadata
+*.egg-info/
+build/
+dist/
+
+# pytest
+.pytest_cache/
