@@ -1,5 +1,15 @@
 # SNMP Diagnostic Poller
 
+> **⚠️ ARCHIVED / OUTDATED**
+>
+> Este documento describe la arquitectura **vieja** (`shared/`, `polling/`,
+> `pocs/`, `diag_poller.py`, `poc_runner.py`) que **ya no existe** en el
+> repositorio. Se conserva sólo como referencia histórica del formato de
+> log y de los campos del poller.
+>
+> Para la arquitectura, instalación y uso actuales del toolkit, ver el
+> [`README.md` en la raíz del repositorio](../README.md).
+
 ## A. Purpose
 
 A standalone, **read-only** diagnostic tool for polling ITS field devices over

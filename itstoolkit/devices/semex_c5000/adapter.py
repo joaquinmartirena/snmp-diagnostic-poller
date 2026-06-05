@@ -63,6 +63,15 @@ class SemexC5000Adapter(DeviceAdapter):
             },
             "vendor": {"type": str, "default": None},
             "type_label": {"type": str, "default": "SEMEX_C5000_V1"},
+            "confirm_write": {
+                "type": bool,
+                "default": False,
+                "description": (
+                    "Mitad-config del doble gate de WriteGuard. El SEMEX hoy "
+                    "no expone escenarios con escritura, pero la clave es "
+                    "reconocida en config para mantener simetría con VMS."
+                ),
+            },
         }
 
     def monitor_tasks(

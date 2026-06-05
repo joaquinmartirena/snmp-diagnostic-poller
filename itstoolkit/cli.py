@@ -7,6 +7,10 @@ Subcomandos:
   vía flags / prompt interactivo.
 - ``probe``: lectura puntual one-shot.
 - ``discover``: walk SNMP desde un OID base.
+- ``scenario``: enumera (``list``) o ejecuta (``run``) los escenarios PoC
+  expuestos por el adapter de cada familia. ``run`` aplica el doble gate de
+  WriteGuard (`confirm_write` en config + `--confirm-write` en CLI) antes
+  de instanciar el cliente SNMP.
 
 La resolución de config sigue una **única** cascada
 (``defaults → YAML → env → flags → prompt``) implementada en
@@ -29,6 +33,7 @@ from .devices import load_all_adapters
 from .modes import discover as discover_mode
 from .modes import monitor as monitor_mode
 from .modes import probe as probe_mode
+from .modes import scenario as scenario_mode
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +226,83 @@ def cmd_probe(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Subcomando: scenario
+# ---------------------------------------------------------------------------
+
+
+def _print_scenarios(items: List[Dict[str, Any]]) -> None:
+    if not items:
+        print("(sin escenarios registrados)")
+        return
+    for it in items:
+        write_tag = " write" if it.get("requires_write") else ""
+        print(
+            f"  {it['id']:14} [{it['execution_mode']}]{write_tag}  {it['name']}"
+        )
+        desc = (it.get("description") or "").strip()
+        if desc:
+            first_line = desc.splitlines()[0]
+            print(f"      {first_line}")
+
+
+def cmd_scenario(args: argparse.Namespace) -> int:
+    action = getattr(args, "scenario_action", None)
+    if action is None:
+        print(
+            "[itstoolkit] scenario requiere un subcomando: 'list' o 'run'.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if action == "list":
+        family = args.family or "vms_ntcip1203"
+        try:
+            items = scenario_mode.list_scenarios(family)
+        except KeyError as exc:
+            print(f"[itstoolkit] {exc}", file=sys.stderr)
+            return 2
+        print(f"--- escenarios registrados para family={family} ---")
+        _print_scenarios(items)
+        return 0
+
+    if action == "run":
+        devices = _devices_from_args(args)
+        try:
+            results = asyncio.run(
+                scenario_mode.run_scenarios(
+                    devices,
+                    scenario_ids=args.scenario or None,
+                    automatic_only=bool(args.automatic_only),
+                    cli_confirm_write=bool(args.confirm_write),
+                )
+            )
+        except KeyError as exc:
+            print(f"[itstoolkit] {exc}", file=sys.stderr)
+            return 2
+
+        print(f"--- {len(results)} escenarios ejecutados ---")
+        any_fail = False
+        any_blocked = False
+        for r in results:
+            print(f"  {r.scenario_id:14} {r.status:14} {r.summary}")
+            if r.evidence_path:
+                print(f"      evidence: {r.evidence_path}")
+            if r.status == "FAIL":
+                any_fail = True
+            elif r.status == "BLOCKED":
+                any_blocked = True
+
+        if any_fail:
+            return 2
+        if any_blocked:
+            return 1
+        return 0
+
+    print(f"[itstoolkit] subcomando scenario desconocido: {action!r}", file=sys.stderr)
+    return 2
+
+
+# ---------------------------------------------------------------------------
 # Subcomando: discover
 # ---------------------------------------------------------------------------
 
@@ -286,6 +368,44 @@ def build_parser() -> argparse.ArgumentParser:
     pd.add_argument("--base-oid", dest="base_oid", help="OID raíz del walk.")
     pd.add_argument("--max-oids", dest="max_oids", type=int, default=200)
     pd.set_defaults(func=cmd_discover)
+
+    # scenario (list / run)
+    ps = sub.add_parser(
+        "scenario",
+        help="Listar o ejecutar escenarios PoC declarados por el adapter.",
+    )
+    ssub = ps.add_subparsers(dest="scenario_action", metavar="<list|run>")
+
+    psl = ssub.add_parser("list", help="Enumerar escenarios de una familia.")
+    psl.add_argument("--family", help="Familia (default: vms_ntcip1203).")
+    psl.set_defaults(func=cmd_scenario)
+
+    psr = ssub.add_parser("run", help="Ejecutar escenarios contra el panel.")
+    psr.add_argument("--config", help="Path a YAML multi-dispositivo.")
+    _add_common_device_flags(psr)
+    psr.add_argument(
+        "--scenario",
+        action="append",
+        help="ID de scenario a correr (repetible). Default: todos.",
+    )
+    psr.add_argument(
+        "--automatic-only",
+        dest="automatic_only",
+        action="store_true",
+        help="Correr únicamente escenarios AUTOMATIC (saltea REQUIRES_PHYSICAL).",
+    )
+    psr.add_argument(
+        "--confirm-write",
+        dest="confirm_write",
+        action="store_true",
+        help=(
+            "Mitad-CLI del doble gate de WriteGuard. Sin esto, escenarios con "
+            "requires_write=True quedan BLOCKED."
+        ),
+    )
+    psr.set_defaults(func=cmd_scenario)
+
+    ps.set_defaults(func=cmd_scenario)
 
     return parser
 

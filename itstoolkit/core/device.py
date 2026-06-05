@@ -25,9 +25,12 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Iterator, List, Mapping, Type
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Mapping, Sequence, Type
 
 from .evidence import EvidenceSink
+
+if TYPE_CHECKING:  # pragma: no cover - solo para type hints
+    from .scenario import Scenario
 
 
 class DeviceAdapter(ABC):
@@ -67,6 +70,15 @@ class DeviceAdapter(ABC):
     async def probe(self, config: Mapping[str, Any]) -> Mapping[str, Any]:
         """Hacer una lectura puntual del estado del dispositivo."""
         raise NotImplementedError
+
+    # -- escenarios PoC (Fase 5) -------------------------------------------
+    # No abstracto: un adapter que no tiene escenarios todavía hereda la lista
+    # vacía y sigue siendo un DeviceAdapter válido. Los adapters con
+    # escenarios (e.g. `vms_ntcip1203`) sobreescriben el método y devuelven
+    # instancias listas para ejecutar.
+    def scenarios(self) -> Sequence["Scenario"]:
+        """Lista de escenarios PoC expuestos por este adapter (orden de declaración)."""
+        return ()
 
 
 class DeviceRegistry:

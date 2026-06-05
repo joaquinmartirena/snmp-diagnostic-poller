@@ -22,10 +22,12 @@ from itstoolkit.core.evidence import (
     detect_changes,
     now_ts,
 )
+from itstoolkit.core.scenario import Scenario
 from itstoolkit.protocols.snmp import values as snmp_values
 from itstoolkit.protocols.snmp.client import SnmpClient, classify_comm_status
 
 from . import decoders, oids
+from .scenarios import all_scenarios as _all_scenarios
 
 
 class VmsNtcip1203Adapter(DeviceAdapter):
@@ -80,6 +82,15 @@ class VmsNtcip1203Adapter(DeviceAdapter):
                     "preservar la distinción Daktronics/Chainzone histórica."
                 ),
             },
+            "confirm_write": {
+                "type": bool,
+                "default": False,
+                "description": (
+                    "Mitad-config del doble gate de WriteGuard. Sólo se "
+                    "consulta en escenarios con requires_write=True; el modo "
+                    "monitor/probe es read-only y la ignora."
+                ),
+            },
         }
 
     def monitor_tasks(
@@ -98,6 +109,10 @@ class VmsNtcip1203Adapter(DeviceAdapter):
         finally:
             # SnmpEngine no expone close() asincrónico; se libera con el GC.
             pass
+
+    def scenarios(self) -> List[Scenario]:
+        """Escenarios PoC declarados por la familia. Ver `scenarios/`."""
+        return list(_all_scenarios())
 
 
 # ---------------------------------------------------------------------------
