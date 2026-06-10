@@ -3,9 +3,9 @@
 API:
 
 - :func:`list_scenarios(family)` enumera escenarios registrados por el
-  adapter de esa familia (id, name, mode, requires_write).
+    adapter de esa familia (id, name, mode, requires_write).
 - :func:`run_scenarios(devices, ...)` ejecuta el subconjunto pedido y
-  devuelve la lista de :class:`ScenarioResult` en el mismo orden.
+    devuelve la lista de :class:`ScenarioResult` en el mismo orden.
 
 Política de seguridad (doble gate):
 
@@ -24,10 +24,12 @@ Evidencia:
 
 Cada scenario escribe a un ``JsonlSink`` propio en::
 
-    <evidence_directory>/<family>/<scenario_id>_<device_name>_<UTC-ts>.jsonl
+    <evidence_directory>/<family>/<device_name>/<run_ts>/<scenario_id>.jsonl
 
-(default ``evidence_directory="evidence"``). El sink se cierra al finalizar
-incluso si el scenario falla.
+(default ``evidence_directory="evidence"``). Todos los escenarios de una
+misma llamada a :func:`run_scenarios` comparten el mismo ``run_ts``, de
+modo que la carpeta de la corrida agrupa todos los PoCs ejecutados juntos.
+El sink se cierra al finalizar incluso si el scenario falla.
 
 Inyección de dependencias:
 
@@ -61,6 +63,7 @@ from itstoolkit.core.scenario import (
     ScenarioResult,
     SnmpSession,
     evidence_path,
+    utc_filename_ts,
 )
 from itstoolkit.protocols.snmp.client import SnmpClient
 
@@ -88,6 +91,14 @@ class _RealSnmpSession:
 
     async def get_one(self, oid):
         return await self.client.get_one(self.transport, self.community, oid)
+
+    async def set_many(self, varbinds):
+        return await self.client.set_many(
+            self.transport, self.community, list(varbinds)
+        )
+
+    async def set_one(self, oid, value):
+        return await self.client.set_one(self.transport, self.community, oid, value)
 
     async def close(self) -> None:
         # pysnmp SnmpEngine se libera por GC; no hay close() asincrónico.
@@ -198,6 +209,8 @@ async def _run_one(
     cli_confirm_write: bool,
     session_factory: SessionFactory,
     evidence_directory: str,
+    run_ts: str,
+    cleanup_after_each: bool = False,
 ) -> ScenarioResult:
     guard = _build_write_guard(device_config, cli_confirm_write)
     path = evidence_path(
@@ -205,6 +218,7 @@ async def _run_one(
         scenario.id,
         str(device_config.get("name", "device")),
         directory=evidence_directory,
+        run_ts=run_ts,
     )
     sink = JsonlSink(path)
     try:
@@ -288,11 +302,40 @@ async def _run_one(
                 summary=f"Excepción durante el scenario: {exc}",
                 error=repr(exc),
             )
-        finally:
+
+        # Cleanup post-scenario (opt-in). Solo tiene sentido si el guard
+        # permite escritura — un scenario read-only no ensucia nada igual.
+        # Se ejecuta SIEMPRE (PASS/PARTIAL/FAIL) para no dejar slots
+        # ocupados tras un fallo a mitad de ritual.
+        if cleanup_after_each and guard.allow_write:
             try:
-                await session.close()
-            except Exception:
-                pass
+                adapter_cls = device_registry.get(family)
+                adapter_instance = adapter_cls()
+                did_cleanup = await adapter_instance.cleanup_after_scenario(
+                    device_config, ctx
+                )
+                ctx.record_step(
+                    "cleanup.done",
+                    operation="VERIFY",
+                    value_read={"cleanup_executed": did_cleanup},
+                    success=True,
+                )
+            except Exception as exc:
+                ctx.record_step(
+                    "cleanup.exception",
+                    operation="VERIFY",
+                    success=False,
+                    error=repr(exc),
+                    notes=(
+                        "Cleanup post-scenario falló — el slot/acción puede "
+                        "haber quedado en estado intermedio."
+                    ),
+                )
+
+        try:
+            await session.close()
+        except Exception:
+            pass
 
         result.evidence_path = path
         ctx.record_summary(result)
@@ -334,6 +377,7 @@ async def run_scenarios(
     cli_confirm_write: bool = False,
     session_factory: Optional[SessionFactory] = None,
     evidence_directory: str = "evidence",
+    cleanup_after_each: bool = False,
 ) -> List[ScenarioResult]:
     """Ejecutar escenarios sobre una lista de dispositivos.
 
@@ -345,6 +389,7 @@ async def run_scenarios(
     igual y registran su propio veredicto.
     """
     sf = session_factory or default_session_factory
+    run_ts = utc_filename_ts()
     results: List[ScenarioResult] = []
     for dev in devices:
         family = dev.get("family")
@@ -366,6 +411,8 @@ async def run_scenarios(
                 cli_confirm_write=cli_confirm_write,
                 session_factory=sf,
                 evidence_directory=evidence_directory,
+                run_ts=run_ts,
+                cleanup_after_each=cleanup_after_each,
             )
             results.append(res)
     return results

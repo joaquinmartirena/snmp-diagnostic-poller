@@ -26,6 +26,7 @@ from pysnmp.hlapi.v3arch.asyncio import (
     SnmpEngine,
     UdpTransportTarget,
     get_cmd,
+    set_cmd,
 )
 
 from itstoolkit.core.safety import DoubleGateWriteGuard, WriteGuard
@@ -163,6 +164,50 @@ class SnmpClient:
     async def get_one(self, transport, community, oid):
         """Return (value_object, err_kind). value is None on missing/sentinel."""
         values, err = await self.get_many(transport, community, [oid])
+        if err:
+            return None, err
+        return values.get(oid), None
+
+    # -- SET operations -----------------------------------------------------
+    async def set_many(self, transport, community, varbinds, *, point=None):
+        """SET several OIDs in one PDU.
+
+        ``varbinds`` es un iterable de ``(oid, pysnmp_value)`` ya tipado
+        (``OctetString``, ``Integer``, etc.) — el caller es responsable de
+        encodear el valor con el tipo correcto.
+
+        Pasa por el WriteGuard antes de tocar el transporte; con un guard
+        read-only se lanza ``WriteNotAllowedError`` sin enviar ningún PDU.
+
+        Devuelve ``(values, err_kind)`` con el mismo formato que ``get_many``:
+        ``values`` contiene los varbinds tal como los devolvió el agente
+        (algunos agentes devuelven el valor escrito, otros el actual).
+        """
+        self._require_write(point)
+        obj_types = [
+            ObjectType(ObjectIdentity(oid), value) for oid, value in varbinds
+        ]
+        error_indication, error_status, error_index, var_binds = await set_cmd(
+            self.engine,
+            CommunityData(community, mpModel=1),
+            transport,
+            ContextData(),
+            *obj_types,
+        )
+        if error_indication:
+            return {}, "TIMEOUT"
+        if error_status:
+            return {}, "SNMP_ERROR"
+        values = {}
+        for oid_obj, val in var_binds:
+            values[str(oid_obj)] = val if is_valid_value(val) else None
+        return values, None
+
+    async def set_one(self, transport, community, oid, value, *, point=None):
+        """SET un único OID. ``value`` debe ser un objeto pysnmp ya tipado."""
+        values, err = await self.set_many(
+            transport, community, [(oid, value)], point=point
+        )
         if err:
             return None, err
         return values.get(oid), None

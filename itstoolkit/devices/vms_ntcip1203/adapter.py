@@ -114,6 +114,50 @@ class VmsNtcip1203Adapter(DeviceAdapter):
         """Escenarios PoC declarados por la familia. Ver `scenarios/`."""
         return list(_all_scenarios())
 
+    async def cleanup_after_scenario(
+        self,
+        config: Mapping[str, Any],
+        ctx: Any,
+    ) -> bool:
+        """Liberar slots de prueba + tabla de acciones + blank de pantalla.
+
+        Lee ``cleanup_slot_range`` y ``cleanup_action_indexes`` del device
+        config para ajustar el alcance (defaults razonables cubren los slots
+        que usan los POCs 5-21). Solo libera slots cuyo ``dmsMessageOwner``
+        coincida con la firma ``itstoolkit-poc`` — nunca toca slots con
+        owner ajeno.
+        """
+        from .scenarios._cleanup import (
+            DEFAULT_ACTION_INDEXES,
+            DEFAULT_SLOT_RANGE,
+            cleanup_vms_panel,
+        )
+
+        # Permitir overrides en el YAML del device:
+        #   cleanup_slot_range: [start, end_inclusive]
+        #   cleanup_action_indexes: [2, 3]
+        slot_range_cfg = config.get("cleanup_slot_range")
+        if (
+            isinstance(slot_range_cfg, (list, tuple))
+            and len(slot_range_cfg) == 2
+        ):
+            slot_range = range(int(slot_range_cfg[0]), int(slot_range_cfg[1]) + 1)
+        else:
+            slot_range = DEFAULT_SLOT_RANGE
+
+        actions_cfg = config.get("cleanup_action_indexes")
+        if isinstance(actions_cfg, (list, tuple)) and actions_cfg:
+            action_indexes = [int(x) for x in actions_cfg]
+        else:
+            action_indexes = list(DEFAULT_ACTION_INDEXES)
+
+        await cleanup_vms_panel(
+            ctx,
+            slot_range=slot_range,
+            action_indexes=action_indexes,
+        )
+        return True
+
 
 # ---------------------------------------------------------------------------
 # Implementación del loop monitor — equivalente al `run_vms` legacy

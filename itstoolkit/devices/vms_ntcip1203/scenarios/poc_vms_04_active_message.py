@@ -7,9 +7,9 @@ confiable, el ``MessageMonitor`` no puede funcionar.
 Pasos:
 
 1. Leer ``dmsControlMode``, ``dmsMessageSourceMode``, ``dmsMsgTableSource``,
-   ``shortErrorStatus``.
+    ``shortErrorStatus``.
 2. Decodificar ``dmsMsgTableSource`` para obtener ``memory_type`` +
-   ``message_number``.
+    ``message_number``.
 3. ``GET`` del MULTI activo en ``dmsMessageMultiString[memory_type][message_number]``.
 4. Calcular el SHA-256 del MULTI normalizado.
 5. Registrar todo en evidencia.

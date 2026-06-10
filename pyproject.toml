@@ -19,6 +19,11 @@ dependencies = [
 dev = [
     "pytest>=7",
 ]
+# Necesario para POC-VMS-15B (carga de BMPs al panel). El toolkit base
+# no lo requiere — instalar con `pip install -e .[graphics]`.
+graphics = [
+    "Pillow>=10",
+]
 
 [project.scripts]
 itstoolkit = "itstoolkit.cli:main"

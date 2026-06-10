@@ -155,6 +155,98 @@ def decode_message_id_code(val: Any) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+DMS_ACTIVATE_MSG_ERROR_MAP = {
+    1: "other",
+    2: "none",
+    3: "priority",
+    4: "messageStatus",
+    5: "messageMemoryType",
+    6: "messageNumber",
+    7: "messageCRC",
+    8: "syntaxMULTI",
+    9: "localMode",
+    10: "centralMode",
+    11: "centralOverrideMode",
+}
+
+
+def decode_activate_msg_error(raw: Any) -> str:
+    """Devuelve nombre simbólico+valor del enum ``dmsActivateMsgError``."""
+    try:
+        v = int(raw)
+    except Exception:
+        return f"unknown({raw})"
+    return f"{DMS_ACTIVATE_MSG_ERROR_MAP.get(v, 'unknown')}({v})"
+
+
+DMS_MULTI_SYNTAX_ERROR_MAP = {
+    1: "other",
+    2: "none",
+    3: "unsupportedTag",
+    4: "unsupportedTagValue",
+    5: "textTooBig",
+    6: "fontNotDefined",
+    7: "characterNotDefined",
+    8: "fieldDeviceNotExist",
+    9: "fieldDeviceError",
+    10: "flashRegionError",
+    11: "tagConflict",
+    12: "tooManyPages",
+    13: "fontVersionID",
+    14: "graphicID",
+    15: "graphicNotDefined",
+}
+
+
+def decode_multi_syntax_error(raw: Any) -> str:
+    try:
+        v = int(raw)
+    except Exception:
+        return f"unknown({raw})"
+    return f"{DMS_MULTI_SYNTAX_ERROR_MAP.get(v, 'unknown')}({v})"
+
+
+DMS_MSG_STATUS_MAP = {
+    1: "notUsed",
+    2: "modifying",
+    3: "validating",
+    4: "valid",
+    5: "error",
+    6: "modifyReq",
+    7: "validateReq",
+    8: "notUsedReq",
+}
+
+
+def decode_message_status(raw: Any) -> str:
+    try:
+        v = int(raw)
+    except Exception:
+        return f"unknown({raw})"
+    return f"{DMS_MSG_STATUS_MAP.get(v, 'unknown')}({v})"
+
+
+DMS_GRAPHIC_STATUS_MAP = {
+    1: "notUsed",
+    2: "modifying",
+    3: "calculatingID",
+    4: "readyForUse",
+    5: "inUse",
+    6: "permanent",
+    7: "modifyReq",
+    8: "readyForUseReq",
+    9: "notUsedReq",
+}
+
+
+def decode_graphic_status(raw: Any) -> str:
+    try:
+        v = int(raw)
+    except Exception:
+        return f"unknown({raw})"
+    return f"{DMS_GRAPHIC_STATUS_MAP.get(v, 'unknown')}({v})"
+
+
 def build_suffix(
     ctrl: str,
     src: str,
@@ -179,5 +271,13 @@ __all__ = [
     "decode_source_mode",
     "decode_short_error_status",
     "decode_message_id_code",
+    "decode_activate_msg_error",
+    "decode_multi_syntax_error",
+    "decode_message_status",
+    "decode_graphic_status",
+    "DMS_ACTIVATE_MSG_ERROR_MAP",
+    "DMS_MULTI_SYNTAX_ERROR_MAP",
+    "DMS_MSG_STATUS_MAP",
+    "DMS_GRAPHIC_STATUS_MAP",
     "build_suffix",
 ]

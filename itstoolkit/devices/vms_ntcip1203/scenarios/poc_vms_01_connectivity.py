@@ -10,7 +10,7 @@ Pasos:
 1. Leer ``sysDescr`` + ``sysUpTime`` 5 veces con intervalo de 5 segundos.
 2. Registrar la latencia y los errores SNMP por intento.
 3. ``PASS`` si las 5/5 lecturas responden sin timeout; ``PARTIAL`` si alguna
-   responde y otras no; ``FAIL`` si ninguna.
+    responde y otras no; ``FAIL`` si ninguna.
 """
 
 from __future__ import annotations

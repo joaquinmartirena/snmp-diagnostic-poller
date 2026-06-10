@@ -80,6 +80,27 @@ class DeviceAdapter(ABC):
         """Lista de escenarios PoC expuestos por este adapter (orden de declaración)."""
         return ()
 
+    # -- cleanup post-PoC --------------------------------------------------
+    # Hook opcional: el runner lo invoca después de cada scenario si el
+    # usuario pasó ``--cleanup-after-each``. El adapter solo debe limpiar
+    # artefactos que él mismo escribió (slots de prueba, índices de tablas,
+    # etc.) — nunca tocar configuración operativa del panel.
+    #
+    # Devuelve ``True`` si hubo limpieza y ``False`` si no hay nada que
+    # limpiar para esta familia. Cualquier excepción se propaga al runner,
+    # que la registra en evidencia como un step adicional.
+    async def cleanup_after_scenario(
+        self,
+        config: Mapping[str, Any],
+        ctx: Any,
+    ) -> bool:
+        """Limpiar artefactos de prueba dejados por un scenario.
+
+        Default: no-op. Las familias que escriben (VMS NTCIP 1203)
+        sobreescriben este método para liberar slots y resetear tablas.
+        """
+        return False
+
 
 class DeviceRegistry:
     """Registro global de adapters por nombre de familia.

@@ -6,12 +6,18 @@
 # se commitean. NO pongas dispositivos reales en este archivo de ejemplo.
 #
 # Uso:
-#     itstoolkit monitor --config config.yaml
-#     itstoolkit probe   --config config.yaml     # primer device del YAML
+#     itstoolkit monitor       --config config.yaml
+#     itstoolkit probe         --config config.yaml   # primer device del YAML
+#     itstoolkit scenario list --family vms_ntcip1203
+#     itstoolkit scenario run  --config config.yaml --automatic-only --confirm-write
 #
 # Familias registradas (ver `itstoolkit/devices/`):
 #   - vms_ntcip1203  (VMS / DMS NTCIP 1203 v3 — Daktronics, Chainzone, ...)
 #   - semex_c5000    (controlador SEMEX C5000, NTCIP 1202)
+#
+# Escenarios PoC (solo vms_ntcip1203): ver docs/README_POCS.md. Los que
+# escriben requieren el doble gate (`confirm_write: true` acá + `--confirm-write`
+# en el CLI) y aceptan knobs `poc_*` opcionales por device.
 #
 # Compat con YAMLs viejos: el campo `type:` con valores `VMS_NTCIP1203`,
 # `VMS_NTCIP1203_DAKTRONICS`, `VMS_NTCIP1203_CHAINZONE`, `SEMEX_C5000_V1`
@@ -27,6 +33,12 @@ devices:
     port: 161
     community: public
     interval_seconds: 60
+    # --- Escenarios PoC (opcional) ---
+    # confirm_write: true                  # mitad-config del doble gate
+    # poc_15b_bmp_path: "assets/cruce_escolar.bmp"   # POC-15B: carga de BMP
+    # poc_15b_graphic_index: 20            # slot del gráfico (0 = auto)
+    # poc_15b_activate: true               # mostrarlo con [g99] tras cargar
+    # poc_15_max_slots_to_walk: 24         # POC-15: alcance del inventario
 
   # NTCIP 1203 variable message sign — Chainzone
   - name: vms_example_chainzone

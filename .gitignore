@@ -4,6 +4,10 @@ config.yaml
 # Runtime logs
 logs/
 
+# Evidencia de PoCs contra paneles reales (contiene IPs, community strings
+# y respuestas SNMP de hardware productivo). Nunca commitear.
+evidence/
+
 # Python
 __pycache__/
 *.pyc
@@ -16,3 +20,6 @@ dist/
 
 # pytest
 .pytest_cache/
+
+# macOS Finder metadata
+.DS_Store

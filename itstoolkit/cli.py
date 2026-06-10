@@ -115,6 +115,17 @@ def _resolve_device_config(
         cli_overrides or {},
     ]
     resolved = core_config.resolve(schema, sources, prompter=prompter)
+
+    # Passthrough de claves no declaradas en el schema. La cascada `resolve`
+    # solo conserva claves del schema (config del adapter para monitor/probe).
+    # Los knobs de escenarios (``poc_*``, ``cleanup_*``, ``expected_multi``)
+    # son específicos de PoCs y no viven en el schema del adapter, pero deben
+    # llegar intactos a ``ScenarioContext.device_config``. Se preservan tal
+    # cual vienen del YAML, sin coerción de tipo.
+    for k, v in entry.items():
+        if k not in resolved and k != "type":
+            resolved[k] = v
+
     resolved["family"] = family
     return resolved
 
@@ -274,6 +285,9 @@ def cmd_scenario(args: argparse.Namespace) -> int:
                     scenario_ids=args.scenario or None,
                     automatic_only=bool(args.automatic_only),
                     cli_confirm_write=bool(args.confirm_write),
+                    cleanup_after_each=bool(
+                        getattr(args, "cleanup_after_each", False)
+                    ),
                 )
             )
         except KeyError as exc:
@@ -401,6 +415,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Mitad-CLI del doble gate de WriteGuard. Sin esto, escenarios con "
             "requires_write=True quedan BLOCKED."
+        ),
+    )
+    psr.add_argument(
+        "--cleanup-after-each",
+        dest="cleanup_after_each",
+        action="store_true",
+        help=(
+            "Después de cada scenario, liberar slots de prueba "
+            "(dmsMessageOwner='itstoolkit-poc'), resetear dmsActionMsgCode y "
+            "blankear la pantalla. Solo aplica si el doble gate está completo."
         ),
     )
     psr.set_defaults(func=cmd_scenario)

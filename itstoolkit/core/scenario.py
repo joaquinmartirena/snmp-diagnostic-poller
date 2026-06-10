@@ -38,7 +38,6 @@ from typing import (
 from .evidence import EvidenceRecord, EvidenceSink, now_ts
 from .safety import WriteGuard
 
-
 # ---------------------------------------------------------------------------
 # Constantes de modo / status (strings, no enums, para serializar limpio a JSONL)
 # ---------------------------------------------------------------------------
@@ -76,6 +75,14 @@ class SnmpSession(Protocol):
         ...
 
     async def get_one(self, oid: str) -> Tuple[Any, Optional[str]]:
+        ...
+
+    async def set_many(
+        self, varbinds: Sequence[Tuple[str, Any]]
+    ) -> Tuple[Mapping[str, Any], Optional[str]]:
+        ...
+
+    async def set_one(self, oid: str, value: Any) -> Tuple[Any, Optional[str]]:
         ...
 
     async def close(self) -> None:
@@ -197,11 +204,9 @@ class Scenario(ABC):
         """Ejecutar el scenario. Devuelve el veredicto."""
         raise NotImplementedError
 
-
 # ---------------------------------------------------------------------------
 # Helpers de serialización / paths
 # ---------------------------------------------------------------------------
-
 
 def utc_iso() -> str:
     """Timestamp UTC ISO-8601 con milisegundos y sufijo ``Z``."""
@@ -246,12 +251,20 @@ def evidence_path(
     device_name: str,
     *,
     directory: str = "evidence",
+    run_ts: Optional[str] = None,
 ) -> str:
-    """Ruta canónica de evidencia: ``<dir>/<family>/<id>_<device>_<ts>.jsonl``."""
-    folder = os.path.join(directory, family)
+    """Ruta canónica de evidencia.
+
+    Layout: ``<dir>/<family>/<device>/<run_ts>/<scenario_id>.jsonl``.
+
+    Si ``run_ts`` no se pasa, se genera uno nuevo con :func:`utc_filename_ts`.
+    El runner debería pasar el mismo ``run_ts`` para todos los escenarios de
+    una misma corrida — así quedan agrupados bajo la misma carpeta de sesión.
+    """
+    ts = run_ts or utc_filename_ts()
+    folder = os.path.join(directory, family, device_name, ts)
     os.makedirs(folder, exist_ok=True)
-    fname = f"{scenario_id}_{device_name}_{utc_filename_ts()}.jsonl"
-    return os.path.join(folder, fname)
+    return os.path.join(folder, f"{scenario_id}.jsonl")
 
 
 def hash_multi(text: str) -> str:
